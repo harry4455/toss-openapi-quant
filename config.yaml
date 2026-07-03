@@ -1,0 +1,39 @@
+# 사용할 계좌 시퀀스. 비워두면 첫 계좌 자동 선택. (DCA에서 사용)
+account_seq:
+
+# 전략 신호 (--signals) — 이평선/RSI 둘 다. 주문 없음(드라이런).
+signals:
+  ma_window: 20        # 종가 < 20일 이동평균이면 BUY 신호
+  rsi_window: 14
+  rsi_threshold: 30    # RSI < 30이면 과매도 BUY 신호
+  symbols: []          # 비우면 아래 dca.baskets 종목을 그대로 사용
+
+# Phase 2 — 정액 분할매수(DCA)
+dca:
+  enabled: true
+  dry_run: true            # ⚠️ true 면 주문 안 보내고 '샀을 주문'만 알림.
+                           #    실거래는 false + 환경변수 TOSS_ENABLE_LIVE_TRADING=I_UNDERSTAND 둘 다 필요.
+  # 검증 통과 전략 필터: none|ma|rsi|both|any (none=무조건 매수, 기존 방식)
+  #   ma=이평선 아래일 때만, rsi=과매도일 때만, both=둘 다, any=하나라도
+  strategy_filter: none
+  ma_window: 20
+  rsi_window: 14
+  rsi_threshold: 30
+  skip_when_closed: true   # 휴장일(주말·공휴일)엔 해당 시장 바스켓 매수 보류
+  baskets:
+    - market: US
+      order_type: MARKET   # 미국 MARKET + amount_usd → 금액주문(정규장 한정)
+      items:
+        - { symbol: VOO,  amount_usd: 100 }
+        - { symbol: AAPL, amount_usd: 50 }
+    - market: US
+      order_type: LIMIT    # 지정가: 현재가 + buffer 로 주문, 수량 환산
+      limit_buffer_pct: 0.3
+      items:
+        - { symbol: QQQ, amount_usd: 50 }
+    - market: KR
+      order_type: LIMIT    # 국내는 금액주문 불가 → 시세로 수량 환산
+      limit_buffer_pct: 0.5
+      items:
+        - { symbol: "069500", amount_krw: 100000 }   # KODEX 200
+        - { symbol: "360750", amount_krw: 100000 }   # TIGER 미국S&P500

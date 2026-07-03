@@ -1,0 +1,12 @@
+.env
+state.json
+data/
+.pytest_cache/
+*.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 개인 백로그(타 프로젝트 참조 포함) — 공개 제외, 로컬 유지
+docs/BACKLOG.md
