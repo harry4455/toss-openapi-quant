@@ -46,6 +46,12 @@ TELEGRAM_CHAT_ID=...
 - This software is a tool for **education and research** — **not investment advice or a solicitation.**
 - Backtest results are based on past data and **do not guarantee future returns.** All investment
   decisions and outcomes (including losses) are **the user's own responsibility.**
+- **⚠️ Live-trading risk (when `dca.dry_run: false` is enabled):** real orders are placed with
+  **real money.** Software bugs, logic errors, network/API outages, quote delays, sudden market
+  moves, or misconfiguration can cause **unintended orders, duplicate orders, non-execution, or
+  financial loss.** The decision to enable live trading — and any resulting loss — is **solely the
+  user's own responsibility.** Always **validate thoroughly with small amounts first** and use at
+  your own risk. The author and contributors are not liable for any live-trading losses.
 - Provided AS-IS, with no warranty (MIT License). The author is not liable for any damages.
 - Each user runs it with **their own Toss Open API keys** and is responsible for complying with
   the Toss Open API terms of service. (This repo contains no keys, account data, or Toss data.)
