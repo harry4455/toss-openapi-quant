@@ -18,7 +18,7 @@ from fastmcp import FastMCP
 
 from .toss_client import TossClient
 from .cache import get_candles_cached
-from . import backtest, fees, momentum, portfolio, validation, signal_eval, signals
+from . import actual, backtest, fees, momentum, portfolio, validation, signal_eval, signals
 from . import fx as fx_mod
 
 # MCP는 임의 작업디렉터리에서 실행되므로 프로젝트 .env를 명시적으로 로드
@@ -274,6 +274,22 @@ def my_trades(symbol: str = "", start: str = "", end: str = "",
         out["trades"] = rows[-max_detail:]
         out["detail_truncated"] = len(rows) > max_detail
     return out
+
+
+
+@mcp.tool()
+def my_vs_backtest(symbol: str, freq: str = "weekly", asset_class: str = "") -> dict:
+    """내가 실제로 한 매매 vs 같은 기간·같은 총액 기계적 DCA 대조.
+
+    실제 체결 이력(평단·수익률·IRR)을 벤치마크 DCA와 나란히 놓는다. 액면분할은
+    자동 보정하고, 주문 이력으로 계산한 수량이 실제 보유와 어긋나면 reconciliation에
+    경고를 넣는다(severity: ok/minor/material). fees도 가정 vs 실측으로 대조한다.
+
+    freq: 벤치마크 매수 주기 'weekly'|'monthly'. 국내 정수주 종목에서 벤치마크가
+    배정액을 다 집행하지 못하면 caveats로 알려주므로 monthly로 키워 다시 보면 된다.
+    """
+    return actual.compare_with_dca(_c(), symbol, freq=freq,
+                                   asset_class=asset_class or None)
 
 
 def main():

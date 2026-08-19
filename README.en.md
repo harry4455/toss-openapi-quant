@@ -19,6 +19,7 @@ behind a double lock.
 | 📊 Backtest | DCA / MA / RSI / lump-sum / basket / momentum | `src.backtest_cli`, `src.momentum_cli` |
 | 🚶 Validation | walk-forward + parameter sweep + signal efficacy | `src.validate_cli`, `src.signal_eval_cli` |
 | 💼 My account | actual holdings & fills (read-only) | `src/portfolio.py` |
+| 🔍 Reality check | my actual trades vs mechanical DCA; fee assumptions | `src/actual.py` |
 | 🤖 MCP | Run the above conversationally in Claude | `run_mcp.py` |
 
 ## Install
@@ -139,7 +140,7 @@ Add to `mcpServers` in `~/.claude.json` (Claude Code) or `claude_desktop_config.
 > Keys load from the project `.env` (TOSS_CLIENT_ID/SECRET) — none in the config.
 > **Restart Claude** to activate. (Others: clone → venv → your keys in `.env` → register.)
 
-### 2) The 9 tools & example prompts
+### 2) The 10 tools & example prompts
 | Tool | What it does | Ask like |
 |---|---|---|
 | `backtest_dca` | DCA backtest (MA/RSI filter, taxes) | "backtest 12y DCA on Samsung, 100k/mo" |
@@ -151,10 +152,17 @@ Add to `mcpServers` in `~/.claude.json` (Claude Code) or `claude_desktop_config.
 | `bull_bear_evidence` | objective numbers for bull/bear case | "lay out the bull and bear case for Samsung" |
 | `my_holdings` | my actual holdings, weights, P&L (KRW-unified) | "how does my portfolio look?" |
 | `my_trades` | my actual fills (aggregated per symbol) | "what did I pay for TQQQ?" |
+| `my_vs_backtest` | my trades vs same-period mechanical DCA | "did my TQQQ buying beat plain DCA?" |
 
 > `my_holdings` / `my_trades` read **your own account** (read-only, never places orders).
 > Backtests are assumptions; these are measurements — feed real holdings straight into a
 > backtest, or check its cost assumptions against your actual fill prices and commissions.
+
+> `my_vs_backtest` **adjusts for stock splits automatically** — order history reports the
+> quantities and prices as filled, so comparing them against split-adjusted candles is wrong
+> (the factor is recovered from the adjusted/unadjusted candle ratio). If share count derived
+> from fills disagrees with actual holdings, `reconciliation.severity` says so — `material`
+> means the history is incomplete and the comparison should not be trusted.
 
 > `bull_bear_evidence` returns only **objective numbers** (trend, MA, RSI, momentum, 52w high/low,
 > drawdown, volatility); Claude writes both sides from the data (engine = numbers, LLM = narrative).
@@ -185,6 +193,7 @@ src/
   notifier.py       # Telegram / console output
   state.py          # DCA idempotency (no duplicate buys)
   portfolio.py      # account snapshot & fills, normalized (KRW-unified)
+  actual.py         # actual-vs-backtest (split adjustment, share reconciliation, fees)
   signals.py        # MA/RSI signals + history logging
   dca.py            # DCA dry-run engine (strategy filter, guards, double lock)
   fees.py           # fee & tax profiles (2026)

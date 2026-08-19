@@ -17,6 +17,7 @@
 | 📊 백테스트 | DCA·이평선·RSI·거치식·바스켓·모멘텀 | `src.backtest_cli`, `src.momentum_cli` |
 | 🚶 검증 | walk-forward + 파라미터 sweep + 신호효용 | `src.validate_cli`, `src.signal_eval_cli` |
 | 💼 내 계좌 | 실제 보유·체결 내역 조회 (읽기 전용) | `src/portfolio.py` |
+| 🔍 실측 대조 | 내 실제 매매 vs 기계적 DCA, 수수료 가정 검증 | `src/actual.py` |
 | 🤖 MCP | 위를 Claude에서 대화로 실행 | `run_mcp.py` |
 
 ## 설치
@@ -142,7 +143,7 @@ python -m src.signal_eval_cli --symbol 005930 --count 3000 --horizons 5,20,60
 > 키는 프로젝트 `.env`(TOSS_CLIENT_ID/SECRET)에서 자동 로드 — 설정 파일에 키 불필요.
 > **등록 후 Claude 재시작**해야 활성화됨. (다른 사람: clone → venv → 본인 키 `.env` → 위 등록)
 
-### 2) 도구 9종 & 예시 질문
+### 2) 도구 10종 & 예시 질문
 | 도구 | 하는 일 | 이렇게 물어보면 됨 |
 |---|---|---|
 | `backtest_dca` | DCA 백테스트(이평선/RSI 필터·세금 옵션) | "삼성 12년 DCA 백테스트, 월 10만원" |
@@ -154,10 +155,16 @@ python -m src.signal_eval_cli --symbol 005930 --count 3000 --horizons 5,20,60
 | `bull_bear_evidence` | 강세/약세 논거용 객관 숫자 | "삼성 강세·약세 논리 정리해줘" |
 | `my_holdings` | 내 실제 보유·비중·손익(KRW 통합) | "내 포트폴리오 지금 어때?" |
 | `my_trades` | 내 실제 체결 내역(종목별 집계) | "내가 TQQQ 얼마에 샀었지?" |
+| `my_vs_backtest` | 내 매매 vs 같은 기간 기계적 DCA | "내 TQQQ 매매가 그냥 DCA보다 나았어?" |
 
 > `my_holdings` / `my_trades`는 **본인 계좌의 실측 데이터**를 읽는다(조회 전용, 주문 없음).
 > 백테스트가 '가정'이라면 이쪽은 '실측' — 심볼을 직접 입력하는 대신 실제 보유를 그대로
 > 백테스트에 넣거나, 실제 체결단가·수수료로 백테스트의 비용 가정을 대조할 수 있다.
+
+> `my_vs_backtest`는 **액면분할을 자동 보정**한다 — 주문 이력의 수량·단가는 체결 당시
+> 원본이라 분할 이후 캔들과 그냥 비교하면 어긋난다(adjusted/unadjusted 캔들 비율로 역산).
+> 주문 이력으로 계산한 수량이 실제 보유와 다르면 `reconciliation.severity`로 알린다
+> (`material`이면 이력이 불완전해 비교를 신뢰할 수 없다는 뜻).
 
 > `bull_bear_evidence`는 숫자(추세·이평선·RSI·모멘텀·52주고저·낙폭·변동성)만 반환하고,
 > 강세/약세 논리는 Claude가 그 숫자로 구성한다(엔진=숫자, LLM=서술).
@@ -196,6 +203,7 @@ src/
   notifier.py       # 텔레그램·콘솔 알림
   state.py          # DCA 멱등성(중복 매수 방지)
   portfolio.py      # 내 계좌 실측 정규화(보유 스냅샷·체결 내역, KRW 통합)
+  actual.py         # 실측 vs 백테스트 대조(분할 보정·수량 대조·수수료 검증)
   signals.py        # 이평선/RSI 신호 + 이력 로깅
   reflection.py     # 신호 로그 사후 회고(실제 주가 대조)
   dca.py            # DCA 드라이런 엔진(전략필터·가드·이중잠금)
