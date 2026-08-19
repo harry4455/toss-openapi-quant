@@ -113,6 +113,7 @@ def trades(client: TossClient, account_seq: str | None = None,
             continue
         filled_at = ex.get("filledAt") or o.get("orderedAt") or ""
         out.append({
+            "order_id": o.get("orderId"),   # 멱등 키(외부 저장소 적재 시)
             "date": filled_at[:10],
             "filled_at": filled_at,
             "symbol": o.get("symbol"),

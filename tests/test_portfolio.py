@@ -117,6 +117,7 @@ def test_trades_normalizes_fields():
     assert first["date"] == "2026-08-17"             # filledAt에서 날짜만
     assert first["price"] == 90.0 and first["amount"] == 90.0
     assert isinstance(first["quantity"], float)      # 문자열 → float
+    assert first["order_id"] == "QLD-2026-08-17-BUY"  # 외부 적재용 멱등 키
 
 
 def test_trades_passes_filters_through():
