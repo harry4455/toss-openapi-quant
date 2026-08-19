@@ -18,7 +18,7 @@ from fastmcp import FastMCP
 
 from .toss_client import TossClient
 from .cache import get_candles_cached
-from . import backtest, fees, momentum, validation, signal_eval, signals
+from . import backtest, fees, momentum, portfolio, validation, signal_eval, signals
 from . import fx as fx_mod
 
 # MCP는 임의 작업디렉터리에서 실행되므로 프로젝트 .env를 명시적으로 로드
@@ -243,6 +243,37 @@ def bull_bear_evidence(symbol: str, count: int = 300) -> dict:
         "max_drawdown_52w_pct": round(mdd * 100, 2),
         "annualized_vol_pct": round(vol, 1) if vol is not None else None,
     }
+
+
+
+# ------------------------------------------------------- 내 계좌(실측) 조회
+@mcp.tool()
+def my_holdings() -> dict:
+    """내 토스 계좌의 현재 보유 종목·비중·손익 (USD는 현재 환율로 KRW 환산 통합).
+
+    읽기 전용. 종목별 평가액/평단/손익률/비중과 통화 노출 비중을 함께 반환한다.
+    백테스트 도구에 넣을 심볼을 직접 타이핑하지 않고 여기서 실제 보유를 가져다 쓰면 된다.
+    """
+    return portfolio.snapshot(_c())
+
+
+@mcp.tool()
+def my_trades(symbol: str = "", start: str = "", end: str = "",
+              detail: bool = False, max_detail: int = 200) -> dict:
+    """내 실제 체결 내역(주문 이력). 기본은 종목별 집계.
+
+    symbol: 특정 종목만 (미지정 시 전체). start/end: 'YYYY-MM-DD' 주문일 기준.
+    detail=True면 개별 체결 목록도 함께 반환(최근 max_detail건, 기본 200).
+
+    체결단가·수수료·세금이 실측이라 백테스트의 비용 가정을 대조하는 데 쓸 수 있다.
+    """
+    rows = portfolio.trades(_c(), symbol=symbol or None,
+                            start=start or None, end=end or None)
+    out = portfolio.trade_summary(rows)
+    if detail:
+        out["trades"] = rows[-max_detail:]
+        out["detail_truncated"] = len(rows) > max_detail
+    return out
 
 
 def main():

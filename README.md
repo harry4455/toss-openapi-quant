@@ -16,6 +16,7 @@
 | 🛒 DCA 드라이런 | 정액 분할매수 시뮬 (주문 X, 이중잠금) | `src.main --dca-once` |
 | 📊 백테스트 | DCA·이평선·RSI·거치식·바스켓·모멘텀 | `src.backtest_cli`, `src.momentum_cli` |
 | 🚶 검증 | walk-forward + 파라미터 sweep + 신호효용 | `src.validate_cli`, `src.signal_eval_cli` |
+| 💼 내 계좌 | 실제 보유·체결 내역 조회 (읽기 전용) | `src/portfolio.py` |
 | 🤖 MCP | 위를 Claude에서 대화로 실행 | `run_mcp.py` |
 
 ## 설치
@@ -141,7 +142,7 @@ python -m src.signal_eval_cli --symbol 005930 --count 3000 --horizons 5,20,60
 > 키는 프로젝트 `.env`(TOSS_CLIENT_ID/SECRET)에서 자동 로드 — 설정 파일에 키 불필요.
 > **등록 후 Claude 재시작**해야 활성화됨. (다른 사람: clone → venv → 본인 키 `.env` → 위 등록)
 
-### 2) 도구 7종 & 예시 질문
+### 2) 도구 9종 & 예시 질문
 | 도구 | 하는 일 | 이렇게 물어보면 됨 |
 |---|---|---|
 | `backtest_dca` | DCA 백테스트(이평선/RSI 필터·세금 옵션) | "삼성 12년 DCA 백테스트, 월 10만원" |
@@ -151,6 +152,12 @@ python -m src.signal_eval_cli --symbol 005930 --count 3000 --horizons 5,20,60
 | `dual_momentum` | 듀얼 모멘텀(세후 포함) | "삼성·애플·VOO 듀얼모멘텀 12개월" |
 | `current_signals` | 오늘 매수 신호 | "VOO·애플 오늘 신호 떴어?" |
 | `bull_bear_evidence` | 강세/약세 논거용 객관 숫자 | "삼성 강세·약세 논리 정리해줘" |
+| `my_holdings` | 내 실제 보유·비중·손익(KRW 통합) | "내 포트폴리오 지금 어때?" |
+| `my_trades` | 내 실제 체결 내역(종목별 집계) | "내가 TQQQ 얼마에 샀었지?" |
+
+> `my_holdings` / `my_trades`는 **본인 계좌의 실측 데이터**를 읽는다(조회 전용, 주문 없음).
+> 백테스트가 '가정'이라면 이쪽은 '실측' — 심볼을 직접 입력하는 대신 실제 보유를 그대로
+> 백테스트에 넣거나, 실제 체결단가·수수료로 백테스트의 비용 가정을 대조할 수 있다.
 
 > `bull_bear_evidence`는 숫자(추세·이평선·RSI·모멘텀·52주고저·낙폭·변동성)만 반환하고,
 > 강세/약세 논리는 Claude가 그 숫자로 구성한다(엔진=숫자, LLM=서술).
@@ -188,6 +195,7 @@ src/
   mcp_server.py     # MCP 서버(백테스트/검증/신호를 Claude 도구로 노출)
   notifier.py       # 텔레그램·콘솔 알림
   state.py          # DCA 멱등성(중복 매수 방지)
+  portfolio.py      # 내 계좌 실측 정규화(보유 스냅샷·체결 내역, KRW 통합)
   signals.py        # 이평선/RSI 신호 + 이력 로깅
   reflection.py     # 신호 로그 사후 회고(실제 주가 대조)
   dca.py            # DCA 드라이런 엔진(전략필터·가드·이중잠금)

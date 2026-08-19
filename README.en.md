@@ -18,6 +18,7 @@ behind a double lock.
 | 🛒 DCA dry-run | Dollar-cost-averaging sim (no orders, double-locked) | `src.main --dca-once` |
 | 📊 Backtest | DCA / MA / RSI / lump-sum / basket / momentum | `src.backtest_cli`, `src.momentum_cli` |
 | 🚶 Validation | walk-forward + parameter sweep + signal efficacy | `src.validate_cli`, `src.signal_eval_cli` |
+| 💼 My account | actual holdings & fills (read-only) | `src/portfolio.py` |
 | 🤖 MCP | Run the above conversationally in Claude | `run_mcp.py` |
 
 ## Install
@@ -138,7 +139,7 @@ Add to `mcpServers` in `~/.claude.json` (Claude Code) or `claude_desktop_config.
 > Keys load from the project `.env` (TOSS_CLIENT_ID/SECRET) — none in the config.
 > **Restart Claude** to activate. (Others: clone → venv → your keys in `.env` → register.)
 
-### 2) The 7 tools & example prompts
+### 2) The 9 tools & example prompts
 | Tool | What it does | Ask like |
 |---|---|---|
 | `backtest_dca` | DCA backtest (MA/RSI filter, taxes) | "backtest 12y DCA on Samsung, 100k/mo" |
@@ -148,6 +149,12 @@ Add to `mcpServers` in `~/.claude.json` (Claude Code) or `claude_desktop_config.
 | `dual_momentum` | dual momentum (incl. after-tax) | "dual momentum on Samsung, AAPL, VOO" |
 | `current_signals` | today's buy signals | "any signal on VOO and AAPL today?" |
 | `bull_bear_evidence` | objective numbers for bull/bear case | "lay out the bull and bear case for Samsung" |
+| `my_holdings` | my actual holdings, weights, P&L (KRW-unified) | "how does my portfolio look?" |
+| `my_trades` | my actual fills (aggregated per symbol) | "what did I pay for TQQQ?" |
+
+> `my_holdings` / `my_trades` read **your own account** (read-only, never places orders).
+> Backtests are assumptions; these are measurements — feed real holdings straight into a
+> backtest, or check its cost assumptions against your actual fill prices and commissions.
 
 > `bull_bear_evidence` returns only **objective numbers** (trend, MA, RSI, momentum, 52w high/low,
 > drawdown, volatility); Claude writes both sides from the data (engine = numbers, LLM = narrative).
@@ -177,6 +184,7 @@ src/
   mcp_server.py     # MCP server (exposes backtest/validation/signals as Claude tools)
   notifier.py       # Telegram / console output
   state.py          # DCA idempotency (no duplicate buys)
+  portfolio.py      # account snapshot & fills, normalized (KRW-unified)
   signals.py        # MA/RSI signals + history logging
   dca.py            # DCA dry-run engine (strategy filter, guards, double lock)
   fees.py           # fee & tax profiles (2026)

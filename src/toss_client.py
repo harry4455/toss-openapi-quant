@@ -1,7 +1,7 @@
 """토스증권 Open API 클라이언트.
 
 - OAuth2 토큰 발급 + 만료 전 자동 재발급, 429 자동 재시도
-- 시세/캔들/환율/시장캘린더/계좌/매수가능금액 조회 (읽기 전용)
+- 시세/캔들/환율/시장캘린더/계좌/보유종목/주문이력/매수가능금액 조회 (읽기 전용)
 - 주문 생성(create_order) — 실제 돈이 나가는 호출. DCA 엔진의 live 모드(이중잠금)에서만 호출됨.
 """
 
@@ -180,6 +180,54 @@ class TossClient:
         return data.get("result", {})
 
     # ---------------------------------------------------------------- orders
+    def get_orders(self, account_seq: str, status: str = "CLOSED",
+                   symbol: str | None = None, start: str | None = None,
+                   end: str | None = None, max_count: int = 2000) -> list[dict]:
+        """GET /api/v1/orders -> 주문 목록 (오래된 순 정렬). 읽기 전용.
+
+        status: 'CLOSED'(종료: FILLED/CANCELED/REJECTED 등) | 'OPEN'(진행 중).
+        start/end: 주문 생성일(orderedAt, KST) 기준 YYYY-MM-DD. 미지정 시 전체 기간.
+        OPEN은 전량 반환(cursor/limit 무시), CLOSED만 커서 페이지네이션(1회 최대 100).
+
+        반환 항목(주요): orderId, symbol, side, orderType, status, quantity,
+        orderAmount, currency, orderedAt, canceledAt,
+        execution: {filledQuantity, averageFilledPrice, filledAmount,
+                    commission, tax, filledAt, settlementDate}
+        """
+        out: list[dict] = []
+        cursor: str | None = None
+
+        # API 특이동작(실측): `to`를 `from` 없이 보내면 항상 0건이 온다. `from`만
+        # 보내면 정렬이 오름차순으로 뒤집힌다. 둘 다 보낼 때만 일관되게 동작하므로
+        # 한쪽만 지정되면 나머지를 넓은 경계값으로 채워 항상 짝으로 보낸다.
+        if start or end:
+            start = start or "2000-01-01"
+            end = end or "2099-12-31"
+
+        while len(out) < max_count:
+            params: dict[str, Any] = {"status": status,
+                                      "limit": min(100, max_count - len(out))}
+            if symbol:
+                params["symbol"] = symbol
+            if start:
+                params["from"] = start
+            if end:
+                params["to"] = end
+            if cursor:
+                params["cursor"] = cursor
+
+            result = self._get("/api/v1/orders", params=params,
+                               account_seq=account_seq).get("result", {})
+            rows = result.get("orders", [])
+            out.extend(rows)
+            cursor = result.get("nextCursor")
+            if not rows or not result.get("hasNext") or not cursor:
+                break
+
+        # 서버 정렬에 기대지 않고 명시 정렬 (오래된→최신, 캔들·백테스트와 같은 방향)
+        out.sort(key=lambda o: o.get("orderedAt") or "")
+        return out
+
     def create_order(self, account_seq: str, order: dict) -> dict:
         """POST /api/v1/orders -> 주문 생성. ⚠️ 실제 체결되는 호출.
 
