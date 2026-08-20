@@ -38,10 +38,14 @@ def snapshot(client: TossClient, account_seq: str | None = None) -> dict:
 
     반환: {as_of_fx_rate, total, currency_split, items:[{..., weight_pct}]}
     items는 KRW 환산 평가액 내림차순.
+
+    레버리지 ETF(TQQQ 3x 등)는 평가액보다 실제 시장 노출이 크다. 종목 기본정보의
+    leverageFactor로 배수를 받아 `exposure_krw`와 총 `leverage_ratio`를 함께 낸다.
     """
     seq = account_seq or resolve_account(client)
     raw = client.get_holdings(seq)
     fx_rate = client.get_exchange_rate("USD", "KRW")
+    meta = client.get_stocks([i["symbol"] for i in raw.get("items", [])])
 
     items: list[dict] = []
     for it in raw.get("items", []):
@@ -50,6 +54,10 @@ def snapshot(client: TossClient, account_seq: str | None = None) -> dict:
         mv, pl = it.get("marketValue", {}), it.get("profitLoss", {})
         daily, cost = it.get("dailyProfitLoss", {}), it.get("cost", {})
         value = _f(mv.get("amount"))
+        info = meta.get(it.get("symbol"), {})
+        # leverageFactor는 ETF/ETN에만 있고 일반 주식은 null → 1배로 본다
+        leverage = _f(info.get("leverageFactor")) or 1.0
+        value_krw = round(value * rate)
         items.append({
             "symbol": it.get("symbol"),
             "name": it.get("name"),
@@ -60,7 +68,10 @@ def snapshot(client: TossClient, account_seq: str | None = None) -> dict:
             "avg_cost": _f(it.get("averagePurchasePrice")),
             "purchase_amount": _f(mv.get("purchaseAmount")),
             "market_value": value,
-            "market_value_krw": round(value * rate),
+            "market_value_krw": value_krw,
+            "security_type": info.get("securityType"),
+            "leverage_factor": leverage,
+            "exposure_krw": round(value_krw * leverage),
             "profit_loss": _f(pl.get("amount")),
             "profit_loss_pct": round(_f(pl.get("rate")) * 100, 2),  # API는 비율(2.9=290%)
             "daily_profit_loss_pct": round(_f(daily.get("rate")) * 100, 2),
@@ -69,6 +80,7 @@ def snapshot(client: TossClient, account_seq: str | None = None) -> dict:
         })
 
     total_value = sum(i["market_value_krw"] for i in items)
+    gross_exposure = sum(i["exposure_krw"] for i in items)
     for i in items:
         i["weight_pct"] = round(i["market_value_krw"] / total_value * 100, 2) if total_value else 0.0
     items.sort(key=lambda x: -x["market_value_krw"])
@@ -87,6 +99,9 @@ def snapshot(client: TossClient, account_seq: str | None = None) -> dict:
             "profit_loss_krw": total_value - invested,
             "profit_loss_pct": round((total_value / invested - 1) * 100, 2) if invested else 0.0,
             "positions": len(items),
+            # 자본 대비 실제 시장 노출. 1.0이면 레버리지 없음
+            "gross_exposure_krw": gross_exposure,
+            "leverage_ratio": round(gross_exposure / total_value, 2) if total_value else 1.0,
         },
         # 통화 노출(환율 리스크)을 KRW 환산 비중으로
         "currency_split_pct": {

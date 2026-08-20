@@ -8,9 +8,13 @@ from src import portfolio
 class FakeClient:
     """TossClient 대역 — portfolio가 쓰는 3개 메서드만 흉내낸다."""
 
-    def __init__(self, holdings=None, orders=None, rate=1400.0):
+    def __init__(self, holdings=None, orders=None, rate=1400.0, stocks=None):
         self._holdings, self._orders, self._rate = holdings or {}, orders or [], rate
+        self._stocks = stocks or {}
         self.order_calls = []
+
+    def get_stocks(self, symbols):
+        return {s: self._stocks.get(s, {}) for s in symbols}
 
     def list_accounts(self):
         return [{"accountNo": "1180", "accountSeq": 1, "accountType": "BROKERAGE"}]
@@ -207,3 +211,77 @@ def test_get_orders_respects_max_count():
     c, seen = _client_with_pages(pages)
     rows = c.get_orders("1", max_count=10)
     assert len(rows) == 10 and seen[0]["limit"] == 10      # limit은 max_count로 축소
+
+
+# ------------------------------------------------------- 레버리지 실질 노출
+LEVERAGED = {
+    "totalPurchaseAmount": {"krw": "0", "usd": "0"},
+    "items": [
+        _holding("TQQQ", "USD", 1, 100, 50, 100, 50, 1.0),   # $100 × 1400 = ₩140,000
+        _holding("VOO", "USD", 1, 100, 50, 100, 50, 1.0),
+    ],
+}
+STOCK_META = {
+    "TQQQ": {"symbol": "TQQQ", "securityType": "ETF", "leverageFactor": "3"},
+    "VOO": {"symbol": "VOO", "securityType": "ETF", "leverageFactor": None},
+}
+
+
+def test_snapshot_applies_leverage_factor():
+    snap = portfolio.snapshot(
+        FakeClient(holdings=LEVERAGED, stocks=STOCK_META), account_seq="1")
+    by = {i["symbol"]: i for i in snap["items"]}
+    assert by["TQQQ"]["leverage_factor"] == 3.0
+    assert by["TQQQ"]["exposure_krw"] == 420_000        # 140,000 × 3
+    assert by["VOO"]["leverage_factor"] == 1.0          # null → 1배
+    assert by["VOO"]["exposure_krw"] == 140_000
+    assert by["TQQQ"]["security_type"] == "ETF"
+
+
+def test_snapshot_totals_gross_exposure_and_ratio():
+    snap = portfolio.snapshot(
+        FakeClient(holdings=LEVERAGED, stocks=STOCK_META), account_seq="1")
+    t = snap["total"]
+    assert t["market_value_krw"] == 280_000            # 140k + 140k
+    assert t["gross_exposure_krw"] == 560_000          # 420k + 140k
+    assert t["leverage_ratio"] == 2.0
+
+
+def test_snapshot_leverage_defaults_to_one_without_metadata():
+    """종목 기본정보를 못 받아도 레버리지는 1배로 안전하게 떨어져야 한다."""
+    snap = portfolio.snapshot(FakeClient(holdings=LEVERAGED), account_seq="1")
+    assert snap["total"]["leverage_ratio"] == 1.0
+    assert all(i["leverage_factor"] == 1.0 for i in snap["items"])
+
+
+# ------------------------------------------- 401 재시도 (토큰 단일 활성 제약)
+def test_get_retries_once_on_invalid_token(monkeypatch):
+    """토스는 client_id당 토큰 1개만 살려둔다 — 다른 프로세스가 갈아끼우면 401이 온다."""
+    from src.toss_client import TossClient
+
+    c = TossClient("id", "secret")
+    c._access_token, c._token_expires_at = "stale", 9e9   # 만료 전이지만 무효한 토큰
+    issued, calls = [], []
+
+    def fake_token():
+        issued.append(1)
+        return "fresh"
+    monkeypatch.setattr(c, "_ensure_token", fake_token)
+
+    class Resp:
+        def __init__(self, code):
+            self.status_code, self.headers, self.text = code, {}, ""
+        def json(self):
+            return {"result": "ok"}
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise AssertionError(f"불필요하게 예외 발생: {self.status_code}")
+
+    def fake_get(url, **kw):
+        calls.append(kw["headers"]["Authorization"])
+        return Resp(401 if len(calls) == 1 else 200)
+    monkeypatch.setattr(c._session, "get", fake_get)
+
+    assert c._get("/api/v1/prices") == {"result": "ok"}
+    assert len(calls) == 2                      # 401 한 번 → 재시도 한 번
+    assert c._access_token is None or issued    # 캐시를 비우고 다시 받았다

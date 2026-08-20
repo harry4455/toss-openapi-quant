@@ -63,7 +63,13 @@ class TossClient:
     def _get(self, path: str, *, params: dict | None = None,
              account_seq: str | None = None, max_retries: int = 4,
              quiet: bool = False) -> dict[str, Any]:
-        """GET 요청. quiet=True면 4xx 에러 로깅 생략(예상된 404 등, 호출부가 처리)."""
+        """GET 요청. quiet=True면 4xx 에러 로깅 생략(예상된 404 등, 호출부가 처리).
+
+        401 재시도: 토스는 client_id 당 활성 토큰을 1개만 유지해서, 같은 키를 쓰는
+        다른 프로세스(예: WealthMind 프론트)가 토큰을 재발급하면 이쪽이 들고 있던
+        토큰이 즉시 무효가 된다. 만료 전이라도 401이면 한 번은 다시 받아 재시도한다.
+        """
+        retried_auth = False
         for attempt in range(max_retries + 1):
             resp = self._session.get(
                 f"{BASE_URL}{path}",
@@ -71,6 +77,12 @@ class TossClient:
                 headers=self._auth_headers(account_seq),
                 timeout=self._timeout,
             )
+            # 401(invalid-token): 다른 프로세스가 토큰을 갈아끼운 경우 — 한 번만 재발급
+            if resp.status_code == 401 and not retried_auth and attempt < max_retries:
+                logger.warning("401 invalid-token, 토큰 재발급 후 재시도")
+                self._access_token, self._token_expires_at = None, 0.0
+                retried_auth = True
+                continue
             # 429(rate-limit): Retry-After 또는 지수 백오프로 재시도
             if resp.status_code == 429 and attempt < max_retries:
                 wait = float(resp.headers.get("Retry-After", 2 ** attempt))
@@ -108,6 +120,18 @@ class TossClient:
         if not symbols:
             return {}
         data = self._get("/api/v1/prices", params={"symbols": ",".join(symbols)})
+        return {row["symbol"]: row for row in data.get("result", [])}
+
+    def get_stocks(self, symbols: list[str]) -> dict[str, dict]:
+        """GET /api/v1/stocks -> {symbol: 기본정보}. 최대 200개.
+
+        주요 필드: name, market, securityType(STOCK/ETF/...), currency,
+        sharesOutstanding(발행주식수), leverageFactor(ETF/ETN 배수, 그 외 null),
+        listDate, status(ACTIVE/DELISTED).
+        """
+        if not symbols:
+            return {}
+        data = self._get("/api/v1/stocks", params={"symbols": ",".join(symbols)})
         return {row["symbol"]: row for row in data.get("result", [])}
 
     def get_candles(self, symbol: str, interval: str = "1d",
